@@ -1,0 +1,424 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Request Walkthrough</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Kalam:wght@400;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<script src="https://cdn.jsdelivr.net/npm/roughjs@4.6.6/bundled/rough.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; }
+  /* Layout: two-column scrollytelling — prose steps left, sticky hand-drawn diagram right; stacked with sticky diagram on top at phone width */
+  :root {
+    --paper: #f6f7fa;
+    --sheet: #ffffff;
+    --ink: #1e2533;
+    --muted: #5f6779;
+    --rule: #dde1ea;
+    --accent: #1971c2;
+    --accent-fill: #a5d8ff;
+    --font-body: "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --font-hand: "Kalam", "Comic Sans MS", "Chalkboard SE", cursive;
+    --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #13161d; --sheet: #1a1e27; --ink: #e5e8ef; --muted: #9aa2b4;
+      --rule: #2b313d; --accent: #74c0fc; --accent-fill: #1d3d5c; color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #13161d; --sheet: #1a1e27; --ink: #e5e8ef; --muted: #9aa2b4;
+    --rule: #2b313d; --accent: #74c0fc; --accent-fill: #1d3d5c; color-scheme: dark;
+  }
+
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--font-body);
+    font-size: 1.0625rem;
+    line-height: 1.6;
+  }
+  .wrap {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+
+  header.intro { padding-block: 2.5rem 1rem; max-width: 62ch; }
+  .eyebrow {
+    font-size: 0.75rem; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--muted); font-weight: 700; margin: 0 0 0.5rem;
+  }
+  h1 {
+    font-family: var(--font-hand); font-weight: 700; font-size: clamp(2rem, 5vw, 2.9rem);
+    line-height: 1.1; margin: 0 0 0.75rem; text-wrap: balance;
+  }
+  .intro p { margin: 0; color: var(--muted); }
+
+  /* ---------- Scrolly ---------- */
+  .scrolly {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+    gap: 3rem;
+    align-items: start;
+  }
+  .steps { padding-bottom: 45vh; min-width: 0; }
+  .step {
+    margin-top: 28vh;
+    padding: 0.25rem 0 0.25rem 1.1rem;
+    border-left: 3px solid var(--rule);
+    opacity: 0.45;
+    cursor: pointer;
+    transition: opacity 0.35s ease, border-color 0.35s ease;
+  }
+  .step:first-child { margin-top: 2rem; }
+  .step.is-active { opacity: 1; border-left-color: var(--accent); }
+  .step:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 2px; }
+  .step h2 {
+    font-family: var(--font-hand); font-weight: 700; font-size: 1.45rem;
+    line-height: 1.2; margin: 0 0 0.35rem;
+  }
+  .step p { margin: 0; max-width: 46ch; }
+  code {
+    font-family: var(--font-mono); font-size: 0.86em;
+    background: var(--sheet); border: 1px solid var(--rule);
+    padding: 0.05em 0.35em; border-radius: 4px;
+  }
+
+  .stage-col { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 1.5rem); min-width: 0; }
+  .stage {
+    background: var(--sheet);
+    border: 1px solid var(--rule);
+    border-radius: 10px;
+    padding: 0.75rem;
+  }
+  .stage svg { display: block; width: 100%; height: auto; max-width: 100%; }
+  .stage-foot {
+    display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+    padding: 0.5rem 0.25rem 0;
+  }
+  .counter { font-family: var(--font-mono); font-size: 0.8rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .dots { display: flex; gap: 0.4rem; }
+  .dot {
+    width: 28px; height: 28px; border-radius: 50%; border: 0; padding: 0;
+    background: transparent; cursor: pointer; display: grid; place-items: center;
+  }
+  .dot::after {
+    content: ""; width: 9px; height: 9px; border-radius: 50%;
+    background: var(--rule); transition: background 0.3s ease, transform 0.3s ease;
+  }
+  .dot.is-active::after { background: var(--accent); transform: scale(1.25); }
+  .dot:focus-visible { outline: 2px solid var(--accent); }
+
+  /* Diagram element states */
+  .el { opacity: 0; color: var(--ink); transition: opacity 0.4s ease, color 0.4s ease; }
+  .el.on { opacity: 1; }
+  .el.hot { color: var(--accent); }
+  .el .fill { color: var(--accent-fill); opacity: 0; transition: opacity 0.4s ease; }
+  .el.hot .fill { opacity: 1; }
+  .el text { font-family: var(--font-hand); fill: currentColor; }
+  .el.draw .ink path { stroke-dasharray: 1; animation: draw 0.9s ease-out both; }
+  @keyframes draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+
+  /* ---------- Behind it ---------- */
+  .behind {
+    border-top: 1px solid var(--rule);
+    padding-block: 2.5rem 3.5rem;
+    display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: 3rem;
+  }
+  .behind h2 { font-family: var(--font-hand); font-size: 1.6rem; margin: 0 0 0.5rem; line-height: 1.2; }
+  .behind p { margin: 0 0 0.75rem; color: var(--muted); max-width: 52ch; }
+  .behind ul { margin: 0; padding-left: 1.1rem; color: var(--muted); }
+  .behind li { margin-bottom: 0.35rem; }
+  pre {
+    margin: 0; overflow-x: auto; background: var(--sheet); border: 1px solid var(--rule);
+    border-radius: 10px; padding: 1rem 1.1rem; font-family: var(--font-mono);
+    font-size: 0.82rem; line-height: 1.65; color: var(--ink);
+  }
+  pre .k { color: var(--accent); }
+  pre .c { color: var(--muted); }
+
+  @media (max-width: 760px) {
+    .scrolly { grid-template-columns: minmax(0, 1fr); gap: 0; }
+    .stage-col {
+      order: -1; top: env(safe-area-inset-top, 0px); z-index: 5;
+      background: var(--paper); padding-block: 0.5rem;
+    }
+    .stage { padding: 0.4rem; }
+    .stage svg { max-height: 36vh; }
+    .step { margin-top: 40vh; }
+    .step:first-child { margin-top: 1.5rem; }
+    .behind { grid-template-columns: minmax(0, 1fr); gap: 1.5rem; }
+    body::before {
+      content: ""; position: fixed; inset: 0 0 auto;
+      height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--paper);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .el, .el .fill, .step, .dot::after { transition: none; }
+    .el.draw .ink path { animation: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="intro">
+    <p class="eyebrow">Code Hike × Excalidraw demo</p>
+    <h1>How a request travels</h1>
+    <p>Scroll through the steps. The diagram builds up one frame at a time, and whatever is new in each step is drawn in blue.</p>
+  </header>
+
+  <section class="scrolly" aria-label="Walkthrough">
+    <div class="steps" id="steps">
+      <article class="step" tabindex="0" data-i="0">
+        <h2>The browser asks</h2>
+        <p>The user clicks a link. The browser resolves the domain and sends a <code>GET</code> request towards the site.</p>
+      </article>
+      <article class="step" tabindex="0" data-i="1">
+        <h2>The CDN checks its cache</h2>
+        <p>The nearest edge node looks for a cached copy. On a hit it answers straight away, and the origin never hears about it. This time it's a miss.</p>
+      </article>
+      <article class="step" tabindex="0" data-i="2">
+        <h2>The origin does the work</h2>
+        <p>The request continues to the app server, which queries the database and renders the response.</p>
+      </article>
+      <article class="step" tabindex="0" data-i="3">
+        <h2>The response flows back</h2>
+        <p>The CDN stores the response with a <code>Cache-Control</code> lifetime, then hands it to the browser. The next visitor gets a hit.</p>
+      </article>
+    </div>
+
+    <div class="stage-col">
+      <div class="stage">
+        <svg id="diagram" viewBox="0 0 420 300" role="img" aria-label="Request diagram, step 1 of 4"></svg>
+        <div class="stage-foot">
+          <span class="counter" id="counter">1 / 4</span>
+          <div class="dots" id="dots" role="group" aria-label="Jump to step"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="behind">
+    <div>
+      <h2>Behind it</h2>
+      <p>In a real Code Hike setup, each <code>## !!steps</code> block in the MDX pairs a bit of prose with one Excalidraw frame exported as an SVG.</p>
+      <ul>
+        <li>Code Hike parses the steps and tracks which one is selected as you scroll.</li>
+        <li>Each frame is a copy of the previous one with a few additions, so unchanged parts stay in place.</li>
+        <li>This page draws the frames live with Rough.js, the library behind Excalidraw's hand-drawn look.</li>
+      </ul>
+    </div>
+    <pre><span class="k">&lt;ScrollyDiagram&gt;</span>
+
+<span class="k">## !!steps</span> The browser asks
+
+The user clicks a link…
+
+<span class="k">![!image</span> Browser sending a request<span class="k">]</span>(/diagrams/request-1.svg)
+
+<span class="k">## !!steps</span> The CDN checks its cache
+
+The nearest edge node…
+
+<span class="k">![!image</span> CDN checking its cache<span class="k">]</span>(/diagrams/request-2.svg)
+
+<span class="c">…two more steps</span>
+
+<span class="k">&lt;/ScrollyDiagram&gt;</span></pre>
+  </section>
+</div>
+
+<script>
+(function () {
+  const NS = "http://www.w3.org/2000/svg";
+  const svg = document.getElementById("diagram");
+  const hasRough = typeof window.rough !== "undefined";
+  const rc = hasRough ? rough.svg(svg) : null;
+  const STEPS = 4;
+  const base = { stroke: "currentColor", strokeWidth: 1.6, roughness: 1.3, bowing: 1.2 };
+
+  // ---- primitive helpers (Rough.js, with a plain-SVG fallback) ----
+  function plain(tag, attrs) {
+    const n = document.createElementNS(NS, tag);
+    for (const k in attrs) n.setAttribute(k, attrs[k]);
+    n.setAttribute("fill", attrs.fill || "none");
+    n.setAttribute("stroke", attrs.stroke || "currentColor");
+    n.setAttribute("stroke-width", attrs["stroke-width"] || 1.6);
+    return n;
+  }
+  function rect(x, y, w, h, seed) {
+    return hasRough ? rc.rectangle(x, y, w, h, { ...base, seed })
+                    : plain("rect", { x, y, width: w, height: h, rx: 6 });
+  }
+  function rectFill(x, y, w, h, seed) {
+    return hasRough
+      ? rc.rectangle(x, y, w, h, { ...base, seed, stroke: "transparent", fill: "currentColor", fillStyle: "hachure", hachureGap: 6, fillWeight: 1 })
+      : plain("rect", { x, y, width: w, height: h, rx: 6, fill: "currentColor", stroke: "none", opacity: 0.6 });
+  }
+  function ellipse(cx, cy, w, h, seed) {
+    return hasRough ? rc.ellipse(cx, cy, w, h, { ...base, seed })
+                    : plain("ellipse", { cx, cy, rx: w / 2, ry: h / 2 });
+  }
+  function line(x1, y1, x2, y2, seed, dashed) {
+    const opts = { ...base, seed };
+    if (dashed) opts.strokeLineDash = [6, 6];
+    return hasRough ? rc.line(x1, y1, x2, y2, opts)
+                    : plain("line", { x1, y1, x2, y2, "stroke-dasharray": dashed ? "6 6" : "" });
+  }
+  function arrow(x1, y1, x2, y2, seed) {
+    const g = document.createElementNS(NS, "g");
+    g.appendChild(line(x1, y1, x2, y2, seed));
+    const a = Math.atan2(y2 - y1, x2 - x1), L = 11, s = 0.45;
+    g.appendChild(line(x2, y2, x2 - L * Math.cos(a - s), y2 - L * Math.sin(a - s), seed + 1));
+    g.appendChild(line(x2, y2, x2 - L * Math.cos(a + s), y2 - L * Math.sin(a + s), seed + 2));
+    return g;
+  }
+  function text(x, y, str, size, anchor) {
+    const t = document.createElementNS(NS, "text");
+    t.setAttribute("x", x); t.setAttribute("y", y);
+    t.setAttribute("font-size", size || 17);
+    t.setAttribute("text-anchor", anchor || "middle");
+    t.setAttribute("dominant-baseline", "middle");
+    t.textContent = str;
+    return t;
+  }
+
+  // ---- diagram elements: each appears at a step and is "hot" (blue) only on that step ----
+  const elements = [];
+  function el(step, build) {
+    const g = document.createElementNS(NS, "g");
+    g.setAttribute("class", "el");
+    const fill = document.createElementNS(NS, "g"); fill.setAttribute("class", "fill");
+    const ink = document.createElementNS(NS, "g"); ink.setAttribute("class", "ink");
+    g.append(fill, ink);
+    build({ fill, ink });
+    ink.querySelectorAll("path, rect, line, ellipse").forEach(p => p.setAttribute("pathLength", "1"));
+    svg.appendChild(g);
+    elements.push({ step, g, shown: false });
+  }
+  function box(step, x, y, w, h, label, seed) {
+    el(step, ({ fill, ink }) => {
+      fill.appendChild(rectFill(x, y, w, h, seed));
+      ink.appendChild(rect(x, y, w, h, seed));
+      ink.appendChild(text(x + w / 2, y + h / 2, label, 18));
+    });
+  }
+
+  // Step 1 — browser + request
+  box(0, 18, 34, 118, 62, "Browser", 11);
+  el(0, ({ ink }) => {
+    ink.appendChild(arrow(142, 56, 270, 56, 21));
+    ink.appendChild(text(206, 40, "GET /pricing", 15));
+  });
+
+  // Step 2 — CDN + cache miss
+  box(1, 278, 34, 124, 62, "CDN edge", 31);
+  el(1, ({ ink }) => {
+    ink.appendChild(ellipse(340, 140, 92, 40, 41));
+    ink.appendChild(text(340, 141, "cache? miss", 15));
+    ink.appendChild(line(340, 98, 340, 119, 45, true));
+  });
+
+  // Step 3 — origin + database
+  box(2, 278, 206, 124, 62, "App server", 51);
+  el(2, ({ fill, ink }) => {
+    // database as a cylinder
+    fill.appendChild(rectFill(36, 214, 92, 52, 61));
+    ink.appendChild(ellipse(82, 214, 92, 22, 62));
+    ink.appendChild(line(36, 214, 36, 264, 63));
+    ink.appendChild(line(128, 214, 128, 264, 64));
+    ink.appendChild(ellipse(82, 264, 92, 22, 65));
+    ink.appendChild(text(82, 242, "Postgres", 16));
+  });
+  el(2, ({ ink }) => {
+    ink.appendChild(arrow(392, 162, 392, 200, 71));
+    ink.appendChild(arrow(272, 236, 140, 236, 75));
+    ink.appendChild(text(206, 222, "SELECT …", 14));
+  });
+
+  // Step 4 — response back
+  el(3, ({ ink }) => {
+    ink.appendChild(arrow(296, 200, 296, 170, 81));
+    ink.appendChild(arrow(270, 84, 142, 84, 85));
+    ink.appendChild(text(206, 102, "200 OK", 15));
+    ink.appendChild(text(206, 120, "Cache-Control: max-age=600", 12));
+  });
+
+  // ---- selection ----
+  const stepEls = Array.from(document.querySelectorAll(".step"));
+  const counter = document.getElementById("counter");
+  const dotsWrap = document.getElementById("dots");
+  const titles = stepEls.map(s => s.querySelector("h2").textContent);
+  const dots = titles.map((t, i) => {
+    const b = document.createElement("button");
+    b.className = "dot"; b.type = "button";
+    b.setAttribute("aria-label", "Step " + (i + 1) + ": " + t);
+    b.addEventListener("click", () => goTo(i, true));
+    dotsWrap.appendChild(b);
+    return b;
+  });
+
+  let current = -1;
+  function setStep(n) {
+    if (n === current) return;
+    current = n;
+    elements.forEach(e => {
+      const on = e.step <= n;
+      e.g.classList.toggle("on", on);
+      e.g.classList.toggle("hot", e.step === n);
+      if (on && !e.shown) {
+        e.g.classList.remove("draw"); void e.g.getBBox(); e.g.classList.add("draw");
+      }
+      e.shown = on;
+    });
+    stepEls.forEach((s, i) => s.classList.toggle("is-active", i === n));
+    dots.forEach((d, i) => {
+      d.classList.toggle("is-active", i === n);
+      d.setAttribute("aria-current", i === n ? "step" : "false");
+    });
+    counter.textContent = (n + 1) + " / " + STEPS;
+    svg.setAttribute("aria-label", "Request diagram, step " + (n + 1) + " of " + STEPS + ": " + titles[n]);
+  }
+
+  let lockUntil = 0;
+  function goTo(i, scroll) {
+    setStep(i);
+    if (scroll) {
+      lockUntil = Date.now() + 900;
+      const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      stepEls[i].scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "center" });
+    }
+  }
+  stepEls.forEach((s, i) => {
+    s.addEventListener("click", () => goTo(i, false));
+    s.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); goTo(i, false); } });
+  });
+
+  function fromScroll() {
+    if (Date.now() < lockUntil) return;
+    const narrow = window.innerWidth <= 760;
+    const lineY = window.innerHeight * (narrow ? 0.72 : 0.55);
+    let pick = 0;
+    stepEls.forEach((s, i) => { if (s.getBoundingClientRect().top < lineY) pick = i; });
+    setStep(pick);
+  }
+  let ticking = false;
+  window.addEventListener("scroll", () => {
+    if (ticking) return; ticking = true;
+    requestAnimationFrame(() => { ticking = false; fromScroll(); });
+  }, { passive: true });
+  window.addEventListener("resize", fromScroll);
+
+  setStep(0);
+  fromScroll();
+})();
+</script>
+</body>
+</html>

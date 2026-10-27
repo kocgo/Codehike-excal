@@ -1,0 +1,31 @@
+import { ScrollyDiagram } from "@/components/scrolly-diagram"
+
+# How a request travels
+
+<ScrollyDiagram>
+
+## !!steps The browser asks
+
+The user clicks a link. The browser resolves the domain and sends a `GET` request.
+
+![!image Browser sending a request](/diagrams/request-1.svg)
+
+## !!steps The CDN checks its cache
+
+The nearest edge node looks for a cached copy. On a hit, it answers straight away and the origin never hears about it.
+
+![!image CDN edge node checking its cache](/diagrams/request-2.svg)
+
+## !!steps The origin does the work
+
+On a miss, the request reaches the app server, which queries the database and renders the response.
+
+![!image App server querying the database](/diagrams/request-3.svg)
+
+## !!steps The response flows back
+
+The CDN stores the response for next time and passes it back to the browser.
+
+![!image Response returning through the CDN](/diagrams/request-4.svg)
+
+</ScrollyDiagram>
